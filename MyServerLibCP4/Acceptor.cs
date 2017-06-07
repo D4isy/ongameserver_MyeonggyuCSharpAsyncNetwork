@@ -75,7 +75,7 @@ namespace MyServerLibCP4
                     theASIO.registerSocket(listener.AcceptTcpClient(), prototype);
                 } while (true);
             }
-            catch (Exception ex)
+            catch (Exception /*ex*/)
             {
             }
         }

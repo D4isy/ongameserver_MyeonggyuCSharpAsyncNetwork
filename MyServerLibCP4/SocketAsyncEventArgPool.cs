@@ -46,7 +46,7 @@ namespace MyServerLibCP4
                 {
                     return m_pool.Pop();
                 }
-                catch (Exception ex)
+                catch (Exception/* ex*/)
                 {
                     return null;
                 }

@@ -41,7 +41,7 @@ namespace MyServerLibCP4
                 {
                     aSocket = theSockets[sockdesc.managedID];
                 }
-                catch (Exception exe)
+                catch (Exception /*ex*/)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
@@ -107,7 +107,7 @@ namespace MyServerLibCP4
                 {
                     aSocket = theSockets[sockdesc.managedID];
                 }
-                catch (Exception exe)
+                catch (Exception /*ex*/)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
@@ -295,7 +295,7 @@ namespace MyServerLibCP4
                         // 위에서 releaseSocket이 되면, 아래 예외처리는 수행되지 않는다.
                     }
                 }
-                catch (Exception ex)
+                catch (Exception /*ex*/)
                 {
                     // releasesocket을 수정하지 말고 각 문맥에서 releaseSAEA를 호출하자
                     if (null != readEventArgs)

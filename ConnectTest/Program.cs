@@ -98,14 +98,20 @@ namespace ConnectTest
                         long d = 1;
                         p.WriteLong(d);
                     }
+
                     receiver.sinfo.theSender.postingSend(receiver.sinfo, p.Position, p.Buffer);
+
                     cnt++;
+
                     if (cnt > 11)
+                    {
                         cnt = 1;
+                    }
+
                     System.Threading.Thread.Sleep(10);
                 }
 
-                Console.ReadLine();
+               // Console.ReadLine();
 
             }
             catch (Exception ex)
