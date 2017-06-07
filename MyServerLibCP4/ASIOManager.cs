@@ -96,15 +96,7 @@ namespace MyServerLibCP4
             buffermanager = new BufferManager(iosize * ioframemax, iosize);
             buffermanager.InitBuffer();
             saeaPool = new SocketAsyncEventArgsPool(ioframemax);
-
-            //SocketAsyncEventArgs saea;
-            //for (int i = 0; i < ioframemax; i++)
-            //{
-            //    // completed와 usertoken은 실제 사용하는 문맥에서 결정한다.
-            //    saea = new SocketAsyncEventArgs();
-            //    buffermanager.SetBuffer(saea);
-            //    saeaPool.Push(saea);
-            //}
+                     
         }
 
         public int connectSocket(int reqID, ASSocket socket, string ipaddress, int port)
