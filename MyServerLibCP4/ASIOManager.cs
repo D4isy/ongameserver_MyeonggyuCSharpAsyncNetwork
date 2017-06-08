@@ -33,31 +33,32 @@ namespace MyServerLibCP4
     // facade격에 해당하는 클래스
     //  응용측에서 인스턴스를 하나 생성해서 관리하세요.
     //  acceptor와 짝을 이루고 싶고, 여러 acceptor를 만들고 싶은 경우가 있기 때문에, 싱글톤으로 안했습니다.
-    public class ASIOManager
+    public class AsyncIOManager
     {
         public static int Min_NetContainer = 1;
         public static int Max_NetContainer = 10;
-        private INetworkReceiver theReceiver;
-        private Dictionary<long, ASNetService> theServices = new Dictionary<long, ASNetService>();
-        private int maxcnt;
-        private int currentid;
-        private int iosize; // 한번에 읽기/쓰기 최대 크기
-        private int ioframemax; // 풀링할 saea의 최대 수 maxconnect와 multiple을 곱해서
-        private BufferManager buffermanager;
-        private SocketAsyncEventArgsPool saeaPool;
+        INetworkReceiver theReceiver;
+        Dictionary<long, AsyncNetService> NetServices = new Dictionary<long, AsyncNetService>();
+        int MaxCount;
+        int CurrentId;
+        int IOSize; // 한번에 읽기/쓰기 최대 크기
+        int IOFrameMax; // 풀링할 saea의 최대 수 maxconnect와 multiple을 곱해서
+        BufferManager BufferManager;
+        SocketAsyncEventArgsPool EventArgsPool;
 
-        public int IOMAXSIZE
-        {
-            get { return iosize; }
-        }
+        public int IOMAXSIZE { get { return IOSize; } }
 
-        public SocketAsyncEventArgs RetreiveSAEA()
+        public SocketAsyncEventArgs RetreiveEventArgs()
         {
             lock (this)
             {
                 SocketAsyncEventArgs saea = new SocketAsyncEventArgs();
-                if (false == buffermanager.SetBuffer(saea))
+
+                if (false == BufferManager.SetBuffer(saea))
+                {
                     throw new OutOfMemoryException("RetreiveSAEA");
+                }
+
                 return saea;
 
             }
@@ -68,50 +69,61 @@ namespace MyServerLibCP4
         {
             lock (this)
             {
-                buffermanager.FreeBuffer(e);
+                BufferManager.FreeBuffer(e);
             }
-            //saeaPool.Push(e);
         }
 
         // io * maxconnect * multiple 만큼 버퍼가 할당됩니다.
-        public ASIOManager(int cnt, INetworkReceiver receiver, int io, int maxconnect, int multiple)
+        public AsyncIOManager(int cnt, INetworkReceiver receiver, int io, int maxconnect, int multiple)
         {
-            if (Min_NetContainer > cnt) cnt = Min_NetContainer;
-            if (Max_NetContainer < cnt) cnt = Max_NetContainer;
-            
-            maxcnt = cnt;
-            theReceiver = receiver;
-
-            for (long index = 1; index <= maxcnt; index++)
+            if (Min_NetContainer > cnt)
             {
-                ASNetService theone = new ASNetService(theReceiver, this);
-                theone.idx = index;
-                theServices.Add(index, theone);
+                cnt = Min_NetContainer;
             }
 
-            currentid = 1;
+            if (Max_NetContainer < cnt)
+            {
+                cnt = Max_NetContainer;
+            }
+            
+            MaxCount = cnt;
+            theReceiver = receiver;
 
-            iosize = io;
-            ioframemax = maxconnect * multiple;
-            buffermanager = new BufferManager(iosize * ioframemax, iosize);
-            buffermanager.InitBuffer();
-            saeaPool = new SocketAsyncEventArgsPool(ioframemax);
+            for (long index = 1; index <= MaxCount; index++)
+            {
+                AsyncNetService theone = new AsyncNetService(theReceiver, this);
+                theone.idx = index;
+                NetServices.Add(index, theone);
+            }
+
+            CurrentId = 1;
+
+            IOSize = io;
+            IOFrameMax = maxconnect * multiple;
+            BufferManager = new BufferManager(IOSize * IOFrameMax, IOSize);
+            BufferManager.InitBuffer();
+            EventArgsPool = new SocketAsyncEventArgsPool(/*ioframemax*/);
                      
         }
 
-        public int connectSocket(int reqID, ASSocket socket, string ipaddress, int port)
+        public int connectSocket(int reqID, AsyncSocket socket, string ipaddress, int port)
         {
             long sel = 1;
-            ASNetService selected = theServices[sel];
-            return selected.connectSocket(reqID, socket, ipaddress, port);
+            AsyncNetService selected = NetServices[sel];
+            return selected.ConnectSocket(reqID, socket, ipaddress, port);
         }
 
-        internal int registerSocket(TcpClient acceptedclient, ASSocket prototype)
+        internal int registerSocket(TcpClient acceptedclient, AsyncSocket prototype)
         {
-            ASNetService selected = theServices[currentid];
-            int ret = selected.registerSocket(acceptedclient, prototype);
-            if (maxcnt < ++currentid)
-                currentid = 1;
+            AsyncNetService selected = NetServices[CurrentId];
+
+            int ret = selected.RegisterSocket(acceptedclient, prototype);
+
+            if (MaxCount < ++CurrentId)
+            {
+                CurrentId = 1;
+            }
+
             return ret;
         }
     }

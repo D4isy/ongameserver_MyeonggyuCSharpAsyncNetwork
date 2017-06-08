@@ -8,23 +8,23 @@ namespace MyServerLibCP4
     /// <summary>
     /// This class creates a single large buffer which can be divided up and assigned to SocketAsyncEventArgs objects for use
     /// with each socket I/O operation.  This enables bufffers to be easily reused and gaurds against fragmenting heap memory.
-    /// 
+    /// 스레드 세이프 하지 않다
     /// The operations exposed on the BufferManager class are not thread safe.
     /// </summary>
     class BufferManager
     {
-        int m_numBytes;                 // the total number of bytes controlled by the buffer pool
-        byte[] m_buffer;                // the underlying byte array maintained by the Buffer Manager
-        Stack<int> m_freeIndexPool;     // 
-        int m_currentIndex;
-        int m_bufferSize;
+        int NumBytes;                 // the total number of bytes controlled by the buffer pool
+        byte[] Buffer;                // the underlying byte array maintained by the Buffer Manager
+        Stack<int> FreeIndexPool;     // 
+        int CurrentIndex;
+        int BufferSize;
 
         public BufferManager(int totalBytes, int bufferSize)
         {
-            m_numBytes = totalBytes;
-            m_currentIndex = 0;
-            m_bufferSize = bufferSize;
-            m_freeIndexPool = new Stack<int>();
+            NumBytes = totalBytes;
+            CurrentIndex = 0;
+            BufferSize = bufferSize;
+            FreeIndexPool = new Stack<int>();
         }
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace MyServerLibCP4
         public void InitBuffer()
         {
             // create one big large buffer and divide that out to each SocketAsyncEventArg object
-            m_buffer = new byte[m_numBytes];
+            Buffer = new byte[NumBytes];
         }
 
         /// <summary>
@@ -43,18 +43,18 @@ namespace MyServerLibCP4
         public bool SetBuffer(SocketAsyncEventArgs args)
         {
 
-            if (m_freeIndexPool.Count > 0)
+            if (FreeIndexPool.Count > 0)
             {
-                args.SetBuffer(m_buffer, m_freeIndexPool.Pop(), m_bufferSize);
+                args.SetBuffer(Buffer, FreeIndexPool.Pop(), BufferSize);
             }
             else
             {
-                if ((m_numBytes - m_bufferSize) < m_currentIndex)
+                if ((NumBytes - BufferSize) < CurrentIndex)
                 {
                     return false;
                 }
-                args.SetBuffer(m_buffer, m_currentIndex, m_bufferSize);
-                m_currentIndex += m_bufferSize;
+                args.SetBuffer(Buffer, CurrentIndex, BufferSize);
+                CurrentIndex += BufferSize;
             }
             return true;
         }
@@ -65,7 +65,7 @@ namespace MyServerLibCP4
         /// </summary>
         public void FreeBuffer(SocketAsyncEventArgs args)
         {
-            m_freeIndexPool.Push(args.Offset);
+            FreeIndexPool.Push(args.Offset);
             args.SetBuffer(null, 0, 0);
             args.Dispose();
         }

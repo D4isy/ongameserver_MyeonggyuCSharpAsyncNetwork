@@ -14,29 +14,29 @@ namespace ConnectTest
 
         // addressinfo => TcpClient.Client.RemoteEndPoint
         // 새로운 연결이 들어왔습니다.
-        public void notifyRegisterSocket(ASSOCKDESC sockdesc, string addressinfo)
+        public void NotifyRegisterSocket(ASSOCKDESC sockdesc, string addressinfo)
         {
-            Console.WriteLine(sockdesc.managedID + " Connected");
+            Console.WriteLine(sockdesc.ManagedID + " Connected");
             lock (this)
             {
-                theSessions.Add(sockdesc.managedID, sockdesc);
+                theSessions.Add(sockdesc.ManagedID, sockdesc);
             }
         }
 
         // 소켓연결이 해제되었습니다.
-        public void notifyReleaseSocket(ASSOCKDESC sockdesc, ASSocket socket)
+        public void NotifyReleaseSocket(ASSOCKDESC sockdesc, AsyncSocket socket)
         {
-            Console.WriteLine(sockdesc.managedID + " Disconnected");
+            Console.WriteLine(sockdesc.ManagedID + " Disconnected");
             lock (this)
             {
-                theSessions.Remove(sockdesc.managedID);
+                theSessions.Remove(sockdesc.ManagedID);
             }
-            sockdesc.theSender.releaseASSOCKDESC(sockdesc);
+            sockdesc.NetSender.ReleaseASSOCKDESC(sockdesc);
         }
 
         // connectSocket에 대한 결과
         //  bSuccess가 false이면 ex가 null이 아닌 개체로 전송됩니다~
-        public void notifyConnectingResult(int requestID, ASSOCKDESC sockdesc, bool bSuccess, Exception ex)
+        public void NotifyConnectingResult(int requestID, ASSOCKDESC sockdesc, bool bSuccess, Exception ex)
         {
             if (true == bSuccess)
             {
@@ -48,7 +48,7 @@ namespace ConnectTest
                 Console.WriteLine(ex.Message);                  
         }
 
-        public void notifyMessage(ASSOCKDESC sockdesc, int length, byte[] data, int offset)
+        public void NotifyMessage(ASSOCKDESC sockdesc, int length, byte[] data, int offset)
         {
             //lock (this)
             //{
@@ -69,8 +69,12 @@ namespace ConnectTest
                 // 1 Gb array
                // byte[] arr = new byte[1024 * 1024 * 1024];
                 MyReceiver receiver = new MyReceiver();
-                ASIOManager netserver = new ASIOManager(1,receiver, 1024, 2000, 512);
-                ASSocket prototype = ASSocket.GetPrototype();
+
+                var maxConnect = 2000;
+                AsyncIOManager netserver = new AsyncIOManager(1,receiver, 1024, maxConnect, 512);
+
+                AsyncSocket prototype = AsyncSocket.GetPrototype();
+                AsyncSocket.InitUIDAllocator(1, maxConnect);
 
                 for (int i = 0; i < 10000; i++)
                 {
@@ -99,7 +103,7 @@ namespace ConnectTest
                         p.WriteLong(d);
                     }
 
-                    receiver.sinfo.theSender.postingSend(receiver.sinfo, p.Position, p.Buffer);
+                    receiver.sinfo.NetSender.PostingSend(receiver.sinfo, p.Position, p.GetBuffer());
 
                     cnt++;
 

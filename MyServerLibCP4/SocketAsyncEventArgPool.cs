@@ -1,26 +1,18 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 
 namespace MyServerLibCP4
 {
     /// <summary>
-    /// Represents a collection of resusable SocketAsyncEventArgs objects.  
+    /// TODO: 현재 사용하고 있지 않음. 사용하도록 수정하기. 참고 http://lab.gamecodi.com/board/zboard.php?id=GAMECODILAB_Lecture_series&no=61
     /// </summary>
     class SocketAsyncEventArgsPool
     {
-        Stack<SocketAsyncEventArgs> m_pool;
+        //Stack<SocketAsyncEventArgs> m_Pool;
+        ConcurrentBag<SocketAsyncEventArgs> m_Pool = new ConcurrentBag<SocketAsyncEventArgs>();
         
-        /// <summary>
-        /// Initializes the object pool to the specified size
-        /// </summary>
-        /// <param name="capacity">The maximum number of SocketAsyncEventArgs objects the pool can hold</param>
-        public SocketAsyncEventArgsPool(int capacity)
-        {
-            m_pool = new Stack<SocketAsyncEventArgs>(capacity);
-        }
-
         /// <summary>
         /// Add a SocketAsyncEventArg instance to the pool
         /// </summary>
@@ -32,10 +24,7 @@ namespace MyServerLibCP4
                 throw new ArgumentNullException("Items added to a SocketAsyncEventArgsPool cannot be null");
             }
 
-            lock (m_pool)
-            {                
-                m_pool.Push(item);
-            }
+            m_Pool.Add(item);
         }
 
         /// <summary>
@@ -44,25 +33,18 @@ namespace MyServerLibCP4
         /// <returns>The object removed from the pool</returns>
         public SocketAsyncEventArgs Pop()
         {
-            lock (m_pool)
+            if(m_Pool.TryTake(out var item) == false)
             {
-                try
-                {
-                    return m_pool.Pop();
-                }
-                catch (Exception/* ex*/)
-                {
-                    return null;
-                }
+                return null;
             }
+
+            return item;
         }
 
         /// <summary>
         /// The number of SocketAsyncEventArgs instances in the pool
         /// </summary>
-        public int Count
-        {
-            get { return m_pool.Count; }
+        public int Count { get { return m_Pool.Count; }
         }
 
     }

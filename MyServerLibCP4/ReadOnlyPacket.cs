@@ -9,10 +9,10 @@ namespace MyServerLibCP4
     // Read...함수를 통해서만 사용할것이니, 프로퍼티 정의할 필요없다.
     public class ReadOnlyPacket
     {
-        private byte[] _Buffer;
-        private int StartPos = 0;
-        private int BufferPos = 0;
-        private int PacketLen;
+        byte[] Buffer;
+        int StartPos = 0;
+        int BufferPos = 0;
+        int PacketLen = 0;
 
         public int REMAINBYTES
         {
@@ -21,7 +21,7 @@ namespace MyServerLibCP4
 
         public ReadOnlyPacket(byte[] buffer, int startpos, int len)
         {
-            _Buffer = buffer;            
+            Buffer = buffer;            
             PacketLen = len;
             BufferPos = 0;
             StartPos = startpos;
@@ -31,7 +31,7 @@ namespace MyServerLibCP4
         {
             int len = REMAINBYTES;
             byte[] msg = new byte[len];
-            Array.Copy(_Buffer, BufferPos, msg, 0, msg.Length);
+            Array.Copy(Buffer, BufferPos, msg, 0, msg.Length);
             BufferPos += len;
             return msg;
         }
@@ -39,7 +39,7 @@ namespace MyServerLibCP4
         public byte[] ReadBytes(int length)
         {
             byte[] msg = new byte[length];
-            Array.Copy(_Buffer, BufferPos, msg, 0, length);
+            Array.Copy(Buffer, BufferPos, msg, 0, length);
             BufferPos += length;
             return msg;
         }
@@ -47,9 +47,13 @@ namespace MyServerLibCP4
         public uint ReadUint()
         {
             int size = sizeof(uint);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            uint read = BitConverter.ToUInt32(_Buffer, StartPos + BufferPos);
+            }
+
+            uint read = BitConverter.ToUInt32(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(uint);
             return read;
         }
@@ -57,9 +61,13 @@ namespace MyServerLibCP4
         public ushort ReadUshort()
         {
             int size = sizeof(ushort);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            ushort read = BitConverter.ToUInt16(_Buffer, StartPos + BufferPos);
+            }
+
+            ushort read = BitConverter.ToUInt16(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(ushort);
             return read;
         }
@@ -67,9 +75,13 @@ namespace MyServerLibCP4
         public double ReadDouble()
         {
             int size = sizeof(double);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            double read = BitConverter.ToDouble(_Buffer, StartPos + BufferPos);
+            }
+
+            double read = BitConverter.ToDouble(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(double);
             return read;
         }
@@ -77,9 +89,13 @@ namespace MyServerLibCP4
         public float ReadFloat()
         {
             int size = sizeof(float);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            float read = BitConverter.ToSingle(_Buffer, StartPos + BufferPos);
+            }
+
+            float read = BitConverter.ToSingle(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(float);
             return read;
         }
@@ -87,9 +103,13 @@ namespace MyServerLibCP4
         public char ReadChar()
         {
             int size = sizeof(char);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            char read = BitConverter.ToChar(_Buffer, StartPos + BufferPos);
+            }
+
+            char read = BitConverter.ToChar(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(char);
             return read;
         }
@@ -97,9 +117,13 @@ namespace MyServerLibCP4
         public bool ReadBool()
         {
             int size = sizeof(bool);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            bool read = BitConverter.ToBoolean(_Buffer, StartPos + BufferPos);
+            }
+
+            bool read = BitConverter.ToBoolean(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(bool);
             return read;
         }
@@ -107,9 +131,13 @@ namespace MyServerLibCP4
         public short ReadShort()
         {
             int size = sizeof(short);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            short read = BitConverter.ToInt16(_Buffer, StartPos + BufferPos);
+            }
+
+            short read = BitConverter.ToInt16(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(short);
             return read;
         }
@@ -117,9 +145,13 @@ namespace MyServerLibCP4
         public long ReadLong()
         {
             int size = sizeof(long);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            long read = BitConverter.ToInt64(_Buffer, StartPos + BufferPos);
+            }
+
+            long read = BitConverter.ToInt64(Buffer, StartPos + BufferPos); 
             BufferPos += sizeof(long);
             return read;
         }
@@ -127,9 +159,13 @@ namespace MyServerLibCP4
         public int ReadInt()
         {
             int size = sizeof(int);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
-            int read = BitConverter.ToInt32(_Buffer, StartPos + BufferPos);
+            }
+
+            int read = BitConverter.ToInt32(Buffer, StartPos + BufferPos);
             BufferPos += sizeof(int);
             return read;
         }
@@ -137,18 +173,22 @@ namespace MyServerLibCP4
         public string ReadString()
         {
             int size = sizeof(int);
+
             if (BufferPos + size > PacketLen)
+            {
                 throw new ArgumentOutOfRangeException();
+            }
+
             int Count = ReadInt();
 
-            string s = System.Text.Encoding.Unicode.GetString(_Buffer, StartPos + BufferPos, Count);
+            string s = System.Text.Encoding.Unicode.GetString(Buffer, StartPos + BufferPos, Count);
             BufferPos += Count;
             return s;
         }
 
         public string ReadString(int Count)
         {
-            string s = System.Text.Encoding.Unicode.GetString(_Buffer, StartPos + BufferPos, Count);
+            string s = System.Text.Encoding.Unicode.GetString(Buffer, StartPos + BufferPos, Count);
             BufferPos += Count;
             string ts = s.TrimEnd('\0');
             return ts;
@@ -156,7 +196,7 @@ namespace MyServerLibCP4
 
         public void ReadDatas(byte[] dest)
         {
-            Array.Copy(_Buffer, BufferPos, dest, 0, dest.Length);
+            Array.Copy(Buffer, BufferPos, dest, 0, dest.Length);
             BufferPos += dest.Length;          
         }
     }

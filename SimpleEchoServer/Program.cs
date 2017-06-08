@@ -14,33 +14,33 @@ namespace SimpleEchoServer
 
         // addressinfo => TcpClient.Client.RemoteEndPoint
         // 새로운 연결이 들어왔습니다.
-        public void notifyRegisterSocket(ASSOCKDESC sockdesc, string addressinfo)
+        public void NotifyRegisterSocket(ASSOCKDESC sockdesc, string addressinfo)
         {
-            Console.WriteLine(sockdesc.managedID + " Connected");
+            Console.WriteLine(sockdesc.ManagedID + " Connected");
             lock (this)
             {
-                theSessions.Add(sockdesc.managedID, sockdesc);
+                theSessions.Add(sockdesc.ManagedID, sockdesc);
             }
         }
 
         // 소켓연결이 해제되었습니다.
-        public void notifyReleaseSocket(ASSOCKDESC sockdesc, ASSocket socket )
+        public void NotifyReleaseSocket(ASSOCKDESC sockdesc, AsyncSocket socket )
         {
-            Console.WriteLine(sockdesc.managedID + " Disconnected");
+            Console.WriteLine(sockdesc.ManagedID + " Disconnected");
             lock (this)
             {
-                theSessions.Remove(sockdesc.managedID);
+                theSessions.Remove(sockdesc.ManagedID);
             }
-            sockdesc.theSender.releaseASSOCKDESC(sockdesc);
+            sockdesc.NetSender.ReleaseASSOCKDESC(sockdesc);
         }
 
         // connectSocket에 대한 결과
         //  bSuccess가 false이면 ex가 null이 아닌 개체로 전송됩니다~
-        public void notifyConnectingResult(int requestID, ASSOCKDESC sockdesc, bool bSuccess, Exception ex)
+        public void NotifyConnectingResult(int requestID, ASSOCKDESC sockdesc, bool bSuccess, Exception ex)
         {
         }
 
-        public void notifyMessage(ASSOCKDESC sockdesc, int length, byte[] data, int offset)
+        public void NotifyMessage(ASSOCKDESC sockdesc, int length, byte[] data, int offset)
         {
             //// 에코로써의 기능은 그대로!~
             //if( 'q' == data[0] )
@@ -50,9 +50,9 @@ namespace SimpleEchoServer
             byte[] buffer = new byte[length];
             Array.Copy(data, offset, buffer, 0, length);
             if( 'q' == buffer[0] )
-                sockdesc.theSender.disconnectSocket(sockdesc);
+                sockdesc.NetSender.DisconnectSocket(sockdesc);
             else
-                sockdesc.theSender.postingSend(sockdesc, buffer.Length, buffer);
+                sockdesc.NetSender.PostingSend(sockdesc, buffer.Length, buffer);
            
         }
 
@@ -68,10 +68,10 @@ namespace SimpleEchoServer
                 {
                     for(int i = 1; i <= 20 ; ++i)
                     {
-                        string buffer = node.Value.managedID + "," + i + "\r\n";
+                        string buffer = node.Value.ManagedID + "," + i + "\r\n";
                         byte[] bStrByte = System.Text.Encoding.Unicode.GetBytes(buffer);
                         //byte[] bStrByte = Encoding.UTF8.GetBytes(buffer);
-                        node.Value.theSender.postingSend( node.Value, bStrByte.Length, bStrByte);
+                        node.Value.NetSender.PostingSend( node.Value, bStrByte.Length, bStrByte);
                     }
                 }
             }
@@ -89,8 +89,13 @@ namespace SimpleEchoServer
             try
             {
                 MyReceiver receiver = new MyReceiver();
-                ASIOManager netserver = new ASIOManager(4,receiver, 1024, 1024, 512);
-                ASSocket prototype = ASSocket.GetPrototype();
+
+                var maxConnect = 1024;
+                AsyncIOManager netserver = new AsyncIOManager(4,receiver, 1024, maxConnect, 512);
+
+                AsyncSocket prototype = AsyncSocket.GetPrototype();
+                AsyncSocket.InitUIDAllocator(1, maxConnect);
+
                 Acceptor acceptor = new Acceptor(netserver, prototype, "192.168.0.79", 3210);
                 acceptor.Start();
 

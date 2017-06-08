@@ -15,64 +15,62 @@ namespace MyServerLibCP4
             eState_Run,
         };
 
-        private TcpListener listener;
-        private Thread listenerThread;
-        //private ASNetService theASIO;
-        private ASIOManager theASIO;
-        public string ipaddress
+        public string IPAddress { get; set; }
+
+        public int Port { get; set; }
+
+        public eState CurrentState { get; set; }
+
+
+        TcpListener Listener;
+        Thread ListenerThread;
+        
+        AsyncIOManager ASIOManager;
+        
+        AsyncSocket Prototype;
+        
+
+        public Acceptor(AsyncIOManager asio, AsyncSocket ap, string aipaddress, int aport)
         {
-            get;
-            set;
-        }
-
-        public int port
-        {
-            get;
-            set;
-        }
-
-        public eState state
-        {
-            get;
-            set;
-        }
-        private ASSocket prototype;
-
-
-
-        public Acceptor(ASIOManager asio, ASSocket ap, string aipaddress, int aport)
-        {
-            theASIO = asio;
-            prototype = ap;
-            ipaddress = aipaddress;
-            port = aport;
-            state = eState.eState_None;
+            ASIOManager = asio;
+            Prototype = ap;
+            IPAddress = aipaddress;
+            Port = aport;
+            CurrentState = eState.eState_None;
         }
 
         public void Start()
         {
-            if (eState.eState_None != state)
+            if (eState.eState_None != CurrentState)
+            {
                 return;
+            }
 
-            listenerThread = new Thread(new ThreadStart(DoListen));
-            listenerThread.Start();
+            ListenerThread = new Thread(new ThreadStart(DoListen));
+            ListenerThread.Start();
 
-            state = eState.eState_Run;
+            CurrentState = eState.eState_Run;
         }
 
         void DoListen()
         { 
             try
             {
-                if ("0.0.0.0" == ipaddress)
-                    listener = new TcpListener(System.Net.IPAddress.Any, port);
+                if ("0.0.0.0" == IPAddress)
+                {
+                    Listener = new TcpListener(System.Net.IPAddress.Any, Port);
+                }
                 else
-                    listener = new TcpListener(System.Net.IPAddress.Parse(ipaddress), port);
-                listener.Start();
+                {
+                    Listener = new TcpListener(System.Net.IPAddress.Parse(IPAddress), Port);
+                }
+
+                Listener.Start();
 
                 do
                 {                    
-                    theASIO.registerSocket(listener.AcceptTcpClient(), prototype);
+                    ASIOManager.registerSocket(Listener.AcceptTcpClient(), Prototype);
+
                 } while (true);
             }
             catch (Exception /*ex*/)

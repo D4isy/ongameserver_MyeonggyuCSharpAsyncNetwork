@@ -5,22 +5,21 @@ using System.Collections.Concurrent;
 
 namespace MyServerLibCP4
 {
-    public class UniqueNumberGenerator
+    /// <summary>
+    /// 유니크 ID(번호) 할당기
+    /// </summary>
+    public class UniqueNumberAllocator
     {
         ConcurrentBag<Int64> UIDSet = new ConcurrentBag<Int64>();
         Int64 StartNumber = 1;
         Int64 MaxCount = 1;
 
-        public UniqueNumberGenerator(Int64 startNumber, Int64 maxCount)
+        
+        public void Reset(Int64 startNumber, Int64 maxCount)
         {
             StartNumber = startNumber;
             MaxCount = maxCount;
 
-            Generate();
-        }
-
-        public void Reset()
-        {
             Generate();
         }
 
@@ -58,42 +57,4 @@ namespace MyServerLibCP4
         
     }
 
-    public class UniqueLongGenerator
-    {
-        private List<long> reuseList = new List<long>();
-
-        private long multiple = 1;
-        private long currentNumber = 0;
-
-        public UniqueLongGenerator(long start, long multi)
-        {
-            multiple = multi;
-            currentNumber = start;
-        }
-
-        public void reset(long start)
-        {
-            reuseList.Clear();
-            currentNumber = start;
-        }
-
-        public long retrieve()
-        {
-            if (0 >= reuseList.Count)
-            {
-                currentNumber += multiple;
-                return currentNumber;
-            }
-
-            long n = reuseList.ElementAt(0);
-            reuseList.RemoveAt(0);
-            return n;
-        }
-
-        public bool release(long n, bool bCheck = false)
-        {
-            reuseList.Add(n);
-            return true;
-        }
-    }
 }

@@ -8,65 +8,62 @@ namespace MyServerLibCP4
 {
     public class ConnectFrame
     {
-        public int reqID;
-        public ASSocket socket;
+        public int ReqID;
+        public AsyncSocket Socket;
     };
 
-    public class IOFrame
-    {
-    };
 
-    internal class ASNetService : INetworkSender
+    internal class AsyncNetService : INetworkSender
     {
         public long idx;
-        private ASIOManager asiomanager;
-        private INetworkReceiver theReceiver;
-        private Dictionary<long, ASSocket> theSockets = new Dictionary<long, ASSocket>();
+        private AsyncIOManager AsioManager;
+        private INetworkReceiver NetReceiver;
+        private Dictionary<long, AsyncSocket> Sockets = new Dictionary<long, AsyncSocket>();
 
-        public ASNetService(INetworkReceiver receiver, ASIOManager asio)
+        public AsyncNetService(INetworkReceiver receiver, AsyncIOManager asio)
         {
-            theReceiver = receiver;
-            asiomanager = asio;
+            NetReceiver = receiver;
+            AsioManager = asio;
         }
 
-        public int postingSend(ASSOCKDESC sockdesc, int length, byte[] data)
+        public int PostingSend(ASSOCKDESC sockdesc, int length, byte[] data)
         {
             // postingSend, ReleaseSocket(다른 워커쓰레드에서 ResultRead, ResultWrite에서 을 쓰레드락걸지 않으면,
             //  aSocket.sendlist를 위해서라도 락을 걸어야한다.
             lock (this)
             {
                 // bugfix 찾지못한경우 널이 반환되는게 아니라 예외가 던져진다.
-                ASSocket aSocket;
+                AsyncSocket aSocket;
                 try
                 {
-                    aSocket = theSockets[sockdesc.managedID];
+                    aSocket = Sockets[sockdesc.ManagedID];
                 }
                 catch (Exception /*ex*/)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
 
-                if (aSocket.theDESC.createTick != sockdesc.createTick)
+                if (aSocket.Description.CreateTick != sockdesc.CreateTick)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
 
                 // asiomanager 생성시 io 크기보다 큰 센드 요청은 할수 없다.
-                if (asiomanager.IOMAXSIZE < length || 0 >= length)
+                if (AsioManager.IOMAXSIZE < length || 0 >= length)
                 {
                     return (int)MyErrorCode.SizeError;
                 }
 
 
                 // sendlist쓰지말고 곧바로 보내버리자!!!
-                SocketAsyncEventArgs writeEventArgs = asiomanager.RetreiveSAEA();
+                SocketAsyncEventArgs writeEventArgs = AsioManager.RetreiveEventArgs();
                 if (null == writeEventArgs)
                 {
                     // temp code critical outofmemory
                     return (int)MyErrorCode.OutOfMemory;
                 }
 
-                aSocket.enterIO();
+                aSocket.EnterIO();
 
                 try
                 {
@@ -75,7 +72,9 @@ namespace MyServerLibCP4
                     writeEventArgs.SetBuffer(writeEventArgs.Buffer, writeEventArgs.Offset, length);
                     Array.Copy(data, 0, writeEventArgs.Buffer, writeEventArgs.Offset, length);
                     writeEventArgs.UserToken = aSocket;
-                    bool willRaiseEvent = aSocket.tcpclient.Client.SendAsync(writeEventArgs);
+
+                    bool willRaiseEvent = aSocket.TCPClient.Client.SendAsync(writeEventArgs);
+
                     if (!willRaiseEvent)
                     {
                         ProcessSend(writeEventArgs);
@@ -84,106 +83,112 @@ namespace MyServerLibCP4
                 catch (Exception ex)
                 {
                     Console.WriteLine(DateTime.Now.ToString() + " - postingSend " + ex.Message);
+
                     if (null != writeEventArgs)
                     {
                         writeEventArgs.Completed -= IO_Completed;
-                        asiomanager.ReleaseSAEA(writeEventArgs);
+                        AsioManager.ReleaseSAEA(writeEventArgs);
                     }
+
                     ReleaseSocket(aSocket);
                 }
             }
             return 0;
         }
 
-        public int disconnectSocket(ASSOCKDESC sockdesc)
+        public int DisconnectSocket(ASSOCKDESC sockdesc)
         {
             lock (this)
             {
                 // 단순히 Close하면되는것인가?
                 // bugfix 찾지못한경우 널이 반환되는게 아니라 예외가 던져진다.
                 // theSockets만 쓰레드컨트롤하면된다.
-                ASSocket aSocket;
+                AsyncSocket aSocket;
                 try
                 {
-                    aSocket = theSockets[sockdesc.managedID];
+                    aSocket = Sockets[sockdesc.ManagedID];
                 }
                 catch (Exception /*ex*/)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
 
-                if (aSocket.theDESC.createTick != sockdesc.createTick)
+                if (aSocket.Description.CreateTick != sockdesc.CreateTick)
                 {
                     return (int)MyErrorCode.NoSuchSocket;
                 }
 
-                aSocket.tcpclient.GetStream().Close();
-                aSocket.tcpclient.Close();
+                aSocket.TCPClient.GetStream().Close();
+                aSocket.TCPClient.Close();
             }
             return 0;
         }
 
-        public int connectSocket(int reqID, ASSocket socket, string ipaddress, int port)
+        public int ConnectSocket(int reqID, AsyncSocket socket, string ipaddress, int port)
         {
             lock (this)
             {
-                if (true == theSockets.ContainsKey(socket.theDESC.managedID))
+                if (true == Sockets.ContainsKey(socket.Description.ManagedID))
+                {
                     return (int)MyErrorCode.AlreadyPostConnect;
+                }
 
                 // 동일한 socket에 대해 connect를 또 요청할수 있으니 미리 컨테이너에 추가하고 하자.
-                theSockets.Add(socket.theDESC.managedID, socket);
+                Sockets.Add(socket.Description.ManagedID, socket);
 
                 ConnectFrame connectFrame = new ConnectFrame();
-                connectFrame.reqID = reqID;
-                connectFrame.socket = socket;
-                connectFrame.socket.theDESC.theSender = this;
+                connectFrame.ReqID = reqID;
+                connectFrame.Socket = socket;
+                connectFrame.Socket.Description.NetSender = this;
 
-                socket.tcpclient = new TcpClient(AddressFamily.InterNetwork);
-                socket.tcpclient.BeginConnect(ipaddress, port, new AsyncCallback(ResultConnect), connectFrame);
+                socket.TCPClient = new TcpClient(AddressFamily.InterNetwork);
+                socket.TCPClient.BeginConnect(ipaddress, port, new AsyncCallback(ResultConnect), connectFrame);
             }
+
             return 0;
         }
 
-        public int releaseASSOCKDESC(ASSOCKDESC sockdesc)
+        public int ReleaseASSOCKDESC(ASSOCKDESC sockdesc)
         {
-            ASSocket.releaseUID(sockdesc.managedID);
+            AsyncSocket.ReleaseUID(sockdesc.ManagedID);
             return 0;
         }
 
         // c#에선 TcpListener.AcceptTcpClient가 반환하는 TcpClient객체레퍼런스를 넘겨줘야한다.
         //  즉 c++에선 int 값을 넘겨줬지만, c#에선 TcpClient 이 객체를 기본 베이스로 사용해야 한다.
-        public int registerSocket(TcpClient acceptedclient, ASSocket prototype)
+        public int RegisterSocket(TcpClient acceptedclient, AsyncSocket prototype)
         {
             // 락을 걸어야하나?
             lock (this)
             {
 
                 // 개체하나를 클론하고
-                ASSocket aSocket = prototype.Clone() as ASSocket;
+                AsyncSocket aSocket = prototype.Clone() as AsyncSocket;
                 aSocket.SetTcpClient(acceptedclient);
-                aSocket.theDESC.theSender = this;
+                aSocket.Description.NetSender = this;
 
                 // 관리리스트에 등록 - need lock
-                theSockets.Add(aSocket.theDESC.managedID, aSocket);
+                Sockets.Add(aSocket.Description.ManagedID, aSocket);
 
                 // 리시버에게
                 // 객체파괴가 어떻게 일어날지 모르니, desc는 값을 복사해서 사용하자.                
                 ASSOCKDESC desc = new ASSOCKDESC();
-                desc.createTick = aSocket.theDESC.createTick;
-                desc.managedID = aSocket.theDESC.managedID;
-                desc.theSender = aSocket.theDESC.theSender;
-                theReceiver.notifyRegisterSocket(desc, aSocket.remoteAddress);
+                desc.CreateTick = aSocket.Description.CreateTick;
+                desc.ManagedID = aSocket.Description.ManagedID;
+                desc.NetSender = aSocket.Description.NetSender;
+                NetReceiver.NotifyRegisterSocket(desc, aSocket.RemoteAddress);
 
                 // 1.1 async 버전으로 업그레이드
-                aSocket.enterIO();
+                aSocket.EnterIO();
 
                 // key saea얻어오기 실패하면 메모리부족이기 때문에, 프로세스를 죽여야한다.
-                SocketAsyncEventArgs readEventArgs = asiomanager.RetreiveSAEA();// new SocketAsyncEventArgs();//= saeaPool.pop(); // saeaPool from the ASIOManager
+                SocketAsyncEventArgs readEventArgs = AsioManager.RetreiveEventArgs();// new SocketAsyncEventArgs();//= saeaPool.pop(); // saeaPool from the ASIOManager
+
                 try
                 {
                     readEventArgs.Completed += new EventHandler<SocketAsyncEventArgs>(IO_Completed);
                     readEventArgs.UserToken = aSocket;
-                    bool willRaiseEvent = aSocket.tcpclient.Client.ReceiveAsync(readEventArgs);
+                    bool willRaiseEvent = aSocket.TCPClient.Client.ReceiveAsync(readEventArgs);
                     if (!willRaiseEvent)
                     {
                         ProcessReceive(readEventArgs);
@@ -197,7 +202,7 @@ namespace MyServerLibCP4
                     if (null != readEventArgs)
                     {
                         readEventArgs.Completed -= IO_Completed;
-                        asiomanager.ReleaseSAEA(readEventArgs);
+                        AsioManager.ReleaseSAEA(readEventArgs);
                     }
                     ReleaseSocket(aSocket);
                 }
@@ -223,13 +228,13 @@ namespace MyServerLibCP4
 
         private void ProcessReceive(SocketAsyncEventArgs e)
         {
-            ASSocket token = (ASSocket)e.UserToken;
+            AsyncSocket token = (AsyncSocket)e.UserToken;
             try
             {                
                 if (e.BytesTransferred > 0 && e.SocketError == SocketError.Success)
                 {
-                    token.handleReceived(e.BytesTransferred, e.Buffer, e.Offset, theReceiver);
-                    bool willRaiseEvent = token.tcpclient.Client.ReceiveAsync(e);
+                    token.HandleReceived(e.BytesTransferred, e.Buffer, e.Offset, NetReceiver);
+                    bool willRaiseEvent = token.TCPClient.Client.ReceiveAsync(e);
                     if (!willRaiseEvent)
                     {
                         // 이 소켓이 대해 계속 즉시 완료가 일어나면, 이 워커쓰레드는 이 소켓처리만 계속하게 될것이다. 하지만 그런경우는 드물다..
@@ -241,7 +246,7 @@ namespace MyServerLibCP4
                     Console.WriteLine(DateTime.Now.ToString() + " - processreceive  " + e.BytesTransferred + " " + e.SocketError);
                     // e를 재사용하려면 e.Completed -= IO_Completed; 하면된다. 현재는 버퍼만 풀링하고 SocketAsyncEventArgs는 풀링하지 않는다.
                     e.Completed -= IO_Completed;
-                    asiomanager.ReleaseSAEA(e);
+                    AsioManager.ReleaseSAEA(e);
                     ReleaseSocket(token);
                 }
             }
@@ -250,7 +255,7 @@ namespace MyServerLibCP4
                 Console.WriteLine(DateTime.Now.ToString() + " - processreceive " + ex.Message);
                 // 응용계층에서 프로토콜 파싱하는 과정에서 발생한 예외도 여기서 캐치되어 세션종료만을 해서 프로세스가 종료되지 않는다.
                 e.Completed -= IO_Completed;
-                asiomanager.ReleaseSAEA(e);
+                AsioManager.ReleaseSAEA(e);
                 ReleaseSocket(token);
             }
         }
@@ -258,9 +263,9 @@ namespace MyServerLibCP4
         private void ProcessSend(SocketAsyncEventArgs e)
         {
             // 다 못보내져서 남은것을 재전송해야하는 경우는??? 
-            ASSocket token = (ASSocket)e.UserToken;
+            AsyncSocket token = (AsyncSocket)e.UserToken;
             e.Completed -= IO_Completed;
-            asiomanager.ReleaseSAEA(e);
+            AsioManager.ReleaseSAEA(e);
             ReleaseSocket(token);
             
         }
@@ -270,25 +275,25 @@ namespace MyServerLibCP4
         {
             ConnectFrame connectFrame = (ar.AsyncState as ConnectFrame);
             ASSOCKDESC desc = new ASSOCKDESC();
-            desc.createTick = connectFrame.socket.theDESC.createTick;
-            desc.managedID = connectFrame.socket.theDESC.managedID;
-            desc.theSender = connectFrame.socket.theDESC.theSender;
+            desc.CreateTick = connectFrame.Socket.Description.CreateTick;
+            desc.ManagedID = connectFrame.Socket.Description.ManagedID;
+            desc.NetSender = connectFrame.Socket.Description.NetSender;
 
             try
             {
-                connectFrame.socket.tcpclient.EndConnect(ar);
-                theReceiver.notifyConnectingResult(connectFrame.reqID, desc, true, null);
+                connectFrame.Socket.TCPClient.EndConnect(ar);
+                NetReceiver.NotifyConnectingResult(connectFrame.ReqID, desc, true, null);
 
                 // 2012-09-19 bugfix PostingRead
                 // 1.1 async 버전으로 업그레이드
-                connectFrame.socket.enterIO();
+                connectFrame.Socket.EnterIO();
 
-                SocketAsyncEventArgs readEventArgs = asiomanager.RetreiveSAEA();// new SocketAsyncEventArgs();//= saeaPool.pop(); // saeaPool from the ASIOManager
+                SocketAsyncEventArgs readEventArgs = AsioManager.RetreiveEventArgs();// new SocketAsyncEventArgs();//= saeaPool.pop(); // saeaPool from the ASIOManager
                 try
                 {
                     readEventArgs.Completed += new EventHandler<SocketAsyncEventArgs>(IO_Completed);
-                    readEventArgs.UserToken = connectFrame.socket;
-                    bool willRaiseEvent = connectFrame.socket.tcpclient.Client.ReceiveAsync(readEventArgs);
+                    readEventArgs.UserToken = connectFrame.Socket;
+                    bool willRaiseEvent = connectFrame.Socket.TCPClient.Client.ReceiveAsync(readEventArgs);
                     if (!willRaiseEvent)
                     {
                         ProcessReceive(readEventArgs);
@@ -301,9 +306,9 @@ namespace MyServerLibCP4
                     if (null != readEventArgs)
                     {
                         readEventArgs.Completed -= IO_Completed;
-                        asiomanager.ReleaseSAEA(readEventArgs);
+                        AsioManager.ReleaseSAEA(readEventArgs);
                     }
-                    ReleaseSocket(connectFrame.socket);
+                    ReleaseSocket(connectFrame.Socket);
                 }
 
             }
@@ -311,19 +316,19 @@ namespace MyServerLibCP4
             {
                 lock (this)
                 {
-                    theSockets.Remove(desc.managedID);
+                    Sockets.Remove(desc.ManagedID);
                 }
-                theReceiver.notifyConnectingResult(connectFrame.reqID, desc, false, ex);
-                connectFrame.socket.tcpclient = null;
+                NetReceiver.NotifyConnectingResult(connectFrame.ReqID, desc, false, ex);
+                connectFrame.Socket.TCPClient = null;
             }
         }
 
 
-        private void ReleaseSocket(ASSocket socket)
+        private void ReleaseSocket(AsyncSocket socket)
         {
             lock (this)
             {
-                int iocount = socket.exitIO();
+                int iocount = socket.ExitIO();
 
                 if (0 == iocount)
                 {
@@ -332,15 +337,15 @@ namespace MyServerLibCP4
                     //socket.tcpclient.Close();
                     //socket.sendlist.Clear();
                     // 객체파괴가 어떻게 일어날지 모르니, desc는 값을 복사해서 사용하자.
-                    theSockets.Remove(socket.theDESC.managedID);
+                    Sockets.Remove(socket.Description.ManagedID);
                     ASSOCKDESC desc = new ASSOCKDESC();
-                    desc.createTick = socket.theDESC.createTick;
-                    desc.managedID = socket.theDESC.managedID;
-                    desc.theSender = socket.theDESC.theSender;
+                    desc.CreateTick = socket.Description.CreateTick;
+                    desc.ManagedID = socket.Description.ManagedID;
+                    desc.NetSender = socket.Description.NetSender;
                     
                     // socket에 대해 메모리 풀링이 필요하다면, clone()과 아래 함수가 풀링에 대해 어떻게 처리할지 담당하면된다.
                     //  socket이 구체적으로 어떤 타입인지에 따라 풀링매니저가 달라져야 하기 때문에, asio계층에선 담당하지 않는다.
-                    theReceiver.notifyReleaseSocket(desc, socket);
+                    NetReceiver.NotifyReleaseSocket(desc, socket);
 
                 }
             }

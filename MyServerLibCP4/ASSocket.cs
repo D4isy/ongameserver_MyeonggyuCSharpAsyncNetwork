@@ -7,36 +7,59 @@ using System.Net.Sockets;
 namespace MyServerLibCP4
 {   
     
-    public class ASSocket
+    public class AsyncSocket
     {
         // 아래 static멤버들은 static함수가 호출되면 순서되로 new 된다.
-        private static UniqueLongGenerator uidGen = new UniqueLongGenerator(0, 1);
-        private static ASSocket asPrototype = new ASSocket();
-        public string remoteAddress = "";
-        public TcpClient tcpclient = null;
-        private int iocount = 0;
-        public bool isSending = false;
+        static UniqueNumberAllocator UIDAllocator = new UniqueNumberAllocator();
 
-        public static ASSocket GetPrototype()
+        //TODO: 이건 필요 없을 수 있음
+        static AsyncSocket ASSocketPrototype = new AsyncSocket();
+
+        public string RemoteAddress = "";
+
+        public TcpClient TCPClient = null;
+
+        int IOCount = 0;
+
+        public bool IsSending = false;
+
+
+        public static AsyncSocket GetPrototype()
         {
-            return asPrototype;            
+            return ASSocketPrototype;            
         }
 
-        public ASSOCKDESC theDESC
+        public AsyncSocket()
         {
-            get;
-            set;
+            IOCount = 0;
+            Description = new ASSOCKDESC();
+            Description.NetSender = null;
+            Description.ManagedID = RetrieveUID();
+            Description.CreateTick = System.Environment.TickCount;
         }
 
-        public static long retrieveUID()
+        public virtual AsyncSocket Clone()
+        {
+            return new AsyncSocket();
+        }
+
+        public static void InitUIDAllocator(Int64 startNumber, Int64 maxCount)
+        {
+            UIDAllocator.Reset(startNumber, maxCount);
+        }
+
+        public ASSOCKDESC Description { get; set; }
+
+        public static long RetrieveUID()
         {
             // .net 4.0에선 enter를 try안에서 하고, 성공여부를 체크해서 finally에서 exit하라고 하는데....
             long id = 0;
             bool acc = false;
+
             try
             {
-                System.Threading.Monitor.Enter(uidGen, ref acc);
-                id = uidGen.retrieve();
+                System.Threading.Monitor.Enter(UIDAllocator, ref acc);
+                id = UIDAllocator.Retrieve();
             }
             finally
             {
@@ -44,81 +67,73 @@ namespace MyServerLibCP4
                 // 예외가 발생하면 이 블럭이 실행되고, 다시 전파되나? 그렇지 않으면 0이 반환되어 심각한 오류가 발생
                 // 일반적으로 이 함수에선 예외가 발생하지 않는다.
                 if (acc)
-                    System.Threading.Monitor.Exit(uidGen);
+                {
+                    System.Threading.Monitor.Exit(UIDAllocator);
+                }
             }
+
             return id;
         }
 
-        public static void releaseUID(long id)
+        public static void ReleaseUID(long id)
         {
             bool acc = false;
+
             try
             {
-                System.Threading.Monitor.Enter(uidGen, ref acc);
-                uidGen.release(id);
+                System.Threading.Monitor.Enter(UIDAllocator, ref acc);
+                UIDAllocator.Release(id);
             }
             finally
-            {                
+            {
                 // 일반적으로 이 함수에선 예외가 발생하지 않는다.
                 if (acc)
-                    System.Threading.Monitor.Exit(uidGen);
+                {
+                    System.Threading.Monitor.Exit(UIDAllocator);
+                }
             }
         } 
 
-        // 이 함수는 객체풀링등을 할때 상속받은 계층에서 사용하시길~
+        // 이 함수는 객체풀링 등을 할때 상속받은 계층에서 사용하시길~
         protected void Finit()
         {
-            remoteAddress = "";
-            tcpclient = null;
-            theDESC.theSender = null;
+            RemoteAddress = "";
+            TCPClient = null;
+            Description.NetSender = null;
         }
-
-        public ASSocket()
-        {
-            iocount = 0;
-            theDESC = new ASSOCKDESC();
-            theDESC.theSender = null;
-            theDESC.managedID = retrieveUID();
-            theDESC.createTick = System.Environment.TickCount;            
-        }
-
-        public virtual ASSocket Clone()
-        {
-            return new ASSocket();
-        }
-
+        
         public void SetTcpClient(TcpClient client)
         {
-            if (null != tcpclient)
+            if (null != TCPClient)
             {
                 // temp code 예외를 던져야한다!?
                 return;
             }
 
-            tcpclient = client;
+            TCPClient = client;
         }
 
-        public int exitIO()
+        public int ExitIO()
         {
-            return System.Threading.Interlocked.Decrement(ref iocount);
+            return System.Threading.Interlocked.Decrement(ref IOCount);
         }
 
-        public int enterIO()
+        public int EnterIO()
         {
-            return System.Threading.Interlocked.Increment(ref iocount);
+            return System.Threading.Interlocked.Increment(ref IOCount);
         }
 
         // 받은 내용을 어떻게 처리할지는 이 함수를 재정의해서 처리하시오!
-        public virtual void handleReceived(int length, byte[] data, int offset, INetworkReceiver receiver)
+        public virtual void HandleReceived(int length, byte[] data, int offset, INetworkReceiver receiver)
         {
             // todo 보통 아래 receiver.notifyMessage 함수에서 프로토콜에 맞는 객체를 생성하면 될것이다.
             //  생성은 쓰레드제어없이 가능하게하고, enqueuing을 쓰레드제어하면 된다.
             // 객체파괴가 어떻게 일어날지 모르니, desc는 값을 복사해서 사용하자.                
             ASSOCKDESC desc = new ASSOCKDESC();
-            desc.createTick = theDESC.createTick;
-            desc.managedID = theDESC.managedID;
-            desc.theSender = theDESC.theSender;
-            receiver.notifyMessage(desc, length, data, offset);
+            desc.CreateTick = Description.CreateTick;
+            desc.ManagedID = Description.ManagedID;
+            desc.NetSender = Description.NetSender;
+            receiver.NotifyMessage(desc, length, data, offset);
         }
     }
 }
